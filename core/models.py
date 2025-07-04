@@ -31,13 +31,7 @@ class Utilisateur(AbstractUser):
     telephone = models.CharField(max_length=20, blank=True)
     type_compte = models.CharField(max_length=12, choices=TYPE_COMPTE)
     statut_abonnement = models.BooleanField(default=False)
-    gmail = models.EmailField(unique=True, blank=True)
-
-    def save(self, *args, **kwargs):
-        if not self.password:
-            self.set_unusable_password()
-        super().save(*args, **kwargs)
-
+    
     class Meta:
         verbose_name = 'Utilisateur'
         verbose_name_plural = 'Utilisateurs'

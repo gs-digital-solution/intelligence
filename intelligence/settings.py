@@ -9,8 +9,11 @@ https://docs.djangoproject.com/en/5.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
-
+#import os
+#from dotenv import load_dotenv
 from pathlib import Path
+
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -24,8 +27,10 @@ SECRET_KEY = 'django-insecure-6_^fvsg*&zeht$*7arwz%k1d155jhnzqle3tmdce!pep*)x6gf
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
-#SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')
-#DEBUG = os.getenv('DJANGO_DEBUG', 'False') == 'True'
+#from dotenv import load_dotenv
+#load_dotenv()
+#SECRET_KEY = os.environ.get('SECRET_KEY')
+#DEBUG = os.environ.get('DEBUG') == 'True'
 
 ALLOWED_HOSTS = []
 
@@ -90,6 +95,16 @@ DATABASES = {
         'CONN_MAX_AGE': 60,  # Ferme les connexions inactives après 60s
     }
 }
+#DATABASES = {
+    #'default': {
+        #'ENGINE': 'django.db.backends.postgresql',
+        #'NAME': os.environ.get('DB_NAME', 'default_db_name'),
+        #'USER': os.environ.get('DB_USER', 'default_user'),
+        #'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+        #'HOST': os.environ.get('DB_HOST', 'localhost'),
+        #'PORT': os.environ.get('DB_PORT', '5432'),
+    #}
+#}
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
