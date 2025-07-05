@@ -60,9 +60,13 @@ class MatiereAdmin(admin.ModelAdmin):
 
 @admin.register(SousSystemeEnseignement)
 class SousSystemeAdmin(admin.ModelAdmin):
-    list_display = ('pays', 'type_systeme', 'nom')
+    list_display = ('pays', 'get_type_systeme_display', 'nom')
     list_filter = ('pays', 'type_systeme')
     search_fields = ('nom',)
+
+    def get_type_systeme_display(self, obj):
+        return obj.get_type_systeme_display()
+    get_type_systeme_display.short_description = 'Type de système'
 
 @admin.register(Classe)
 class ClasseAdmin(admin.ModelAdmin):
@@ -87,10 +91,14 @@ class ExerciceAdminForm(forms.ModelForm):
 @admin.register(Exercice)
 class ExerciceAdmin(admin.ModelAdmin):
     form = ExerciceAdminForm
-    list_display = ('type_exercice', 'difficulte', 'date_creation')
+    list_display = ('type_exercice', 'get_difficulte_display', 'date_creation')
     list_filter = ('type_exercice', 'difficulte')
     search_fields = ('enonce_latex', 'corrige_latex')
     filter_horizontal = ('lecons',)
+
+    def get_difficulte_display(self, obj):
+        return obj.get_difficulte_display()
+    get_difficulte_display.short_description = 'Difficulté'
 
 @admin.register(Lecon)
 class LeconAdmin(admin.ModelAdmin):

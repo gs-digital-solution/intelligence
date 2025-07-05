@@ -2,28 +2,27 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import AbstractUser, Group, Permission
-from django.utils.translation import gettext_lazy as _
 
 class Utilisateur(AbstractUser):
     # 1. Résolution des conflits de groupes/permissions
     groups = models.ManyToManyField(
         Group,
-        verbose_name=_('groupes'),
+        verbose_name='groupes',
         blank=True,
-        related_name="utilisateurs",  # Nom unique
+        related_name="utilisateurs",
         related_query_name="utilisateur",
-        help_text=_('Groupes auxquels appartient cet utilisateur.'),
+        help_text='Groupes auxquels appartient cet utilisateur.',
     )
     user_permissions = models.ManyToManyField(
         Permission,
-        verbose_name=_('permissions utilisateur'),
+        verbose_name='permissions utilisateur',
         blank=True,
-        related_name="utilisateurs",  # Nom unique 
+        related_name="utilisateurs",
         related_query_name="utilisateur",
-        help_text=_('Permissions spécifiques pour cet utilisateur.'),
+        help_text='Permissions spécifiques pour cet utilisateur.',
     )
 
-    # 2. Vos champs personnalisés (inchangés)
+    # 2. Vos champs personnalisés
     TYPE_COMPTE = (
         ('ELEVE', 'Élève'),
         ('ENSEIGNANT', 'Enseignant'),
@@ -133,7 +132,7 @@ class Exercice(models.Model):
         ('MOYEN', 'Moyen'),
         ('DIFFICILE', 'Difficile'),
     )
-    lecons = models.ManyToManyField(Lecon)  # Relation many-to-many
+    lecons = models.ManyToManyField(Lecon)
     type_exercice = models.ForeignKey(TypeExercice, on_delete=models.CASCADE)
     difficulte = models.CharField(max_length=10, choices=DIFFICULTE)
     enonce_latex = models.TextField()
