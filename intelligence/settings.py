@@ -108,3 +108,23 @@ if not DEBUG:
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
+# Paramètres spécifiques au développement
+if DEBUG:
+    # Désactive les protections SSL/HTTPS en dev
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
+    SECURE_SSL_REDIRECT = False
+    
+    # Crée le répertoire static s'il n'existe pas
+    STATIC_DIR = BASE_DIR / 'static'
+    if not STATIC_DIR.exists():
+        STATIC_DIR.mkdir()
+else:
+    # Paramètres PRODUCTION (à décommenter plus tard)
+    # SECURE_HSTS_SECONDS = 3600
+    # SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    # SECURE_SSL_REDIRECT = True
+    # SESSION_COOKIE_SECURE = True
+    # CSRF_COOKIE_SECURE = True
+    pass
+
