@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import AbstractUser, Group, Permission
+from django.core.validators import FileExtensionValidator
 
 class Utilisateur(AbstractUser):
     # 1. Résolution des conflits de groupes/permissions
@@ -54,30 +55,22 @@ class Investisseur(models.Model):
 
 class Pays(models.Model):
     nom = models.CharField(max_length=100, unique=True)
-    code = models.CharField(max_length=3)
+    #code = models.CharField(max_length=3)
 
     def __str__(self):
-        return self.nom
+         return self.nom
 
 class SousSystemeEnseignement(models.Model):
-    TYPE_SYSTEME = (
-        ('PRIMAIRE_FR', 'Primaire francophone'),
-        ('PRIMAIRE_EN', 'Primaire anglophone'),
-        ('SECONDAIRE_FR', 'Secondaire francophone'),
-        ('SECONDAIRE_EN', 'Secondaire anglophone'),
-        ('SUPERIEUR', 'Enseignement supérieur'),
-    )
     pays = models.ForeignKey(Pays, on_delete=models.CASCADE)
-    type_systeme = models.CharField(max_length=13, choices=TYPE_SYSTEME)
     nom = models.CharField(max_length=50)
 
     class Meta:
-        unique_together = ('pays', 'type_systeme', 'nom')
+        unique_together = ('pays', 'nom')  # Modification ici
         verbose_name = "Sous-système éducatif"
         verbose_name_plural = "Sous-systèmes éducatifs"
 
     def __str__(self):
-        return f"{self.pays} - {self.get_type_systeme_display()}"
+        return f"{self.pays} - {self.nom}"  # Modification ici
 
 class Classe(models.Model):
     sous_systeme = models.ForeignKey(SousSystemeEnseignement, on_delete=models.CASCADE)
@@ -91,40 +84,59 @@ class Classe(models.Model):
         return f"{self.sous_systeme} - {self.nom}"
 
 class Matiere(models.Model):
-    classes = models.ManyToManyField(Classe)
+    classe = models.ForeignKey(Classe, on_delete=models.CASCADE)  # Changé de ManyToMany à ForeignKey
+    #classe = models.ForeignKey(Classe, on_delete=models.CASCADE, null=True, blank=True)
     nom = models.CharField(max_length=100)
     code = models.CharField(max_length=10)
 
+    class Meta:
+        unique_together = ('classe', 'nom')  # Ajout pour garantir l'unicité du nom par classe
+
     def __str__(self):
-        return f"{self.nom} ({self.code})"
+        return f"{self.nom} ({self.code}) - {self.classe}"  # Ajout de la classe dans l'affichage
 
 class TypeExercice(models.Model):
-    matiere = models.ForeignKey(Matiere, on_delete=models.CASCADE)
-    nom = models.CharField(max_length=50)
-    description = models.TextField(blank=True)
+    classe = models.ForeignKey(Classe, on_delete=models.CASCADE, verbose_name="Classe")
+    matiere = models.ForeignKey(Matiere, on_delete=models.CASCADE, verbose_name="Matière")
+    nom = models.CharField(max_length=50, verbose_name="Nom du type")
+    #description = models.TextField(blank=True, verbose_name="Description")
 
     class Meta:
-        unique_together = ('matiere', 'nom')
+        unique_together = ('classe', 'matiere', 'nom')
         verbose_name = "Type d'exercice"
         verbose_name_plural = "Types d'exercices"
 
     def __str__(self):
         return f"{self.matiere} - {self.nom}"
 
+    def save(self, *args, **kwargs):
+        """Validation cohérence classe-matière"""
+        if self.matiere.classe != self.classe:
+            raise ValueError("La matière doit appartenir à la classe sélectionnée")
+        super().save(*args, **kwargs)
+
 class Lecon(models.Model):
     matiere = models.ForeignKey(Matiere, on_delete=models.CASCADE)
-    classe = models.ForeignKey(Classe, on_delete=models.CASCADE)
+    # Supprimez la ForeignKey 'classe' car elle est déjà accessible via 'matiere.classe'
     titre = models.CharField(max_length=200)
     contenu_latex = models.TextField()
-    fichier_pdf = models.FileField(upload_to='lecons/pdf/')
+    fichier_pdf = models.FileField(
+        upload_to='lecons/pdf/',
+        validators=[FileExtensionValidator(['pdf'])]  # Validation des fichiers
+    )
 
     class Meta:
-        unique_together = ('matiere', 'classe', 'titre')
+        unique_together = ('matiere', 'titre')  # Simplifié
         verbose_name = "Leçon"
         verbose_name_plural = "Leçons"
 
     def __str__(self):
         return f"{self.matiere} - {self.titre}"
+
+    # Propriété pour accéder à la classe via la matière (optionnel)
+    @property
+    def classe(self):
+        return self.matiere.classe
 
 class Exercice(models.Model):
     DIFFICULTE = (
@@ -132,7 +144,15 @@ class Exercice(models.Model):
         ('MOYEN', 'Moyen'),
         ('DIFFICILE', 'Difficile'),
     )
-    lecons = models.ManyToManyField(Lecon)
+    classe = models.ForeignKey(
+        'Classe', 
+        on_delete=models.CASCADE, 
+        verbose_name="Classe",
+        null=True,  # Temporairement nullable pour la migration
+        blank=True  # Permet un champ vide dans l'admin
+    )
+    matiere = models.ForeignKey('Matiere', on_delete=models.CASCADE, verbose_name="Matière")
+    lecons = models.ManyToManyField('Lecon', blank=True, verbose_name="Leçons concernées")
     type_exercice = models.ForeignKey(TypeExercice, on_delete=models.CASCADE)
     difficulte = models.CharField(max_length=10, choices=DIFFICULTE)
     enonce_latex = models.TextField()
@@ -142,6 +162,7 @@ class Exercice(models.Model):
     class Meta:
         verbose_name = "Exercice"
         verbose_name_plural = "Exercices"
+        ordering = ['-date_creation']  # Tri par défaut
 
     def __str__(self):
-        return f"{self.type_exercice} ({self.get_difficulte_display()})"
+        return f"{self.matiere} - {self.type_exercice} ({self.get_difficulte_display()})"

@@ -2,8 +2,21 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django import forms
 from django.contrib.auth.hashers import make_password
-from .models import *
+from django.templatetags.static import static
+from .models import (
+    Utilisateur,
+    Investisseur,
+    Pays,
+    SousSystemeEnseignement,
+    Classe,
+    Matiere,
+    TypeExercice,
+    Lecon,
+    Exercice
+)
+from .forms import ExerciceAdminForm
 
+# 1. Définition des formulaires personnalisés
 class InvestisseurForm(forms.ModelForm):
     password = forms.CharField(widget=forms.PasswordInput, required=False)
 
@@ -11,7 +24,90 @@ class InvestisseurForm(forms.ModelForm):
         model = Investisseur
         fields = '__all__'
 
-@admin.register(Investisseur)
+# 2. Définition des classes Admin
+class UtilisateurAdmin(UserAdmin):
+    list_display = ('username', 'email', 'gmail', 'type_compte', 'statut_abonnement')
+    list_filter = ('type_compte', 'statut_abonnement')
+    search_fields = ('username', 'email', 'gmail')
+    fieldsets = (
+        (None, {'fields': ('username', 'password')}),
+        ('Informations personnelles', {'fields': ('first_name', 'last_name', 'email', 'gmail', 'telephone')}),
+        ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
+        ('Métadonnées', {'fields': ('type_compte', 'statut_abonnement', 'last_login', 'date_joined')}),
+    )
+
+class LeconInline(admin.TabularInline):
+    model = Lecon
+    extra = 1
+
+class MatiereAdmin(admin.ModelAdmin):
+    list_display = ('nom', 'code', 'classe')
+    list_filter = ('classe',)
+    search_fields = ('nom', 'code')
+    inlines = [LeconInline]
+
+class SousSystemeAdmin(admin.ModelAdmin):
+    list_display = ('pays', 'nom')
+    list_filter = ('pays',)
+    search_fields = ('nom',)
+
+class ClasseAdmin(admin.ModelAdmin):
+    list_display = ('sous_systeme', 'nom')
+    list_filter = ('sous_systeme',)
+    search_fields = ('nom',)
+
+class TypeExerciceForm(forms.ModelForm):
+    class Meta:
+        model = TypeExercice
+        fields = '__all__'
+        widgets = {
+            'classe': forms.Select(attrs={'class': 'classe-select'}),
+            'matiere': forms.Select(attrs={'class': 'matiere-select'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Filtrage initial si instance existe
+        if self.instance.pk:
+            self.fields['matiere'].queryset = Matiere.objects.filter(classe=self.instance.classe)
+        else:
+            self.fields['matiere'].queryset = Matiere.objects.none()
+
+class TypeExerciceAdmin(admin.ModelAdmin):
+    form = TypeExerciceForm
+    list_display = ('classe', 'matiere', 'nom')
+    list_filter = ('classe', 'matiere')
+    #search_fields = ('nom', 'description')
+    autocomplete_fields = ['matiere']
+    
+    class Media:
+        js = ('js/type_exercice_admin.js',)  # JS pour le filtrage dynamique
+
+class ExerciceAdmin(admin.ModelAdmin):
+    form = ExerciceAdminForm
+    list_display = ('classe', 'matiere', 'type_exercice', 'difficulte')
+    list_filter = ('classe', 'matiere', 'difficulte')
+    filter_horizontal = ('lecons',)
+    search_fields = ('enonce_latex', 'corrige_latex')
+    
+    class Media:
+        js = ('js/exercice_admin.js',)  # Intégration du JS pour le filtrage dynamique
+
+class LeconAdmin(admin.ModelAdmin):
+    list_display = ('titre', 'matiere', 'classe')
+    list_filter = ('matiere__classe', 'matiere')
+    search_fields = ('titre', 'contenu_latex')
+    autocomplete_fields = ['matiere']
+
+    def classe(self, obj):
+        return obj.matiere.classe
+    classe.admin_order_field = 'matiere__classe'
+
+class PaysAdmin(admin.ModelAdmin):
+    list_display = ('nom',)
+    search_fields = ('nom',)
+
 class InvestisseurAdmin(admin.ModelAdmin):
     form = InvestisseurForm
     list_display = ('nom', 'email', 'pourcentage', 'date_investissement')
@@ -34,79 +130,35 @@ class InvestisseurAdmin(admin.ModelAdmin):
             obj.set_password(form.cleaned_data['password'])
         super().save_model(request, obj, form, change)
 
-class UtilisateurAdmin(UserAdmin):
-    list_display = ('username', 'email', 'gmail', 'type_compte', 'statut_abonnement')
-    list_filter = ('type_compte', 'statut_abonnement')
-    search_fields = ('username', 'email', 'gmail')
-    fieldsets = (
-        (None, {'fields': ('username', 'password')}),
-        ('Informations personnelles', {'fields': ('first_name', 'last_name', 'email', 'gmail', 'telephone')}),
-        ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
-        ('Métadonnées', {'fields': ('type_compte', 'statut_abonnement', 'last_login', 'date_joined')}),
-    )
+# 3. Configuration de l'AdminSite personnalisé
+class CISAdminSite(admin.AdminSite):
+    site_header = "CIS: Correcteur Intelligent de Sujets"
+    site_title = "CIS Admin"
+    index_title = "Administration CIS"
+    enable_nav_sidebar = True
 
-admin.site.register(Utilisateur, UtilisateurAdmin)
+    @property
+    def media(self):
+        media = super().media
+        media.add_css({
+            'all': static('core/css/cis-admin.css'),
+        })
+        media.add_js(('js/exercice_admin.js',))  # Chargement global du JS
+        return media
 
-class LeconInline(admin.TabularInline):
-    model = Lecon
-    extra = 1
+# 4. Création et configuration de l'instance admin
+admin_site = CISAdminSite(name='cis_admin')
 
-@admin.register(Matiere)
-class MatiereAdmin(admin.ModelAdmin):
-    filter_horizontal = ('classes',)
-    list_display = ('nom', 'code')
-    search_fields = ('nom', 'code')
-    inlines = [LeconInline]
+# 5. Enregistrement des modèles
+admin_site.register(Utilisateur, UtilisateurAdmin)
+admin_site.register(Investisseur, InvestisseurAdmin)
+admin_site.register(Pays, PaysAdmin)
+admin_site.register(SousSystemeEnseignement, SousSystemeAdmin)
+admin_site.register(Classe, ClasseAdmin)
+admin_site.register(Matiere, MatiereAdmin)
+admin_site.register(TypeExercice, TypeExerciceAdmin)
+admin_site.register(Lecon, LeconAdmin)
+admin_site.register(Exercice, ExerciceAdmin)
 
-@admin.register(SousSystemeEnseignement)
-class SousSystemeAdmin(admin.ModelAdmin):
-    list_display = ('pays', 'get_type_systeme_display', 'nom')
-    list_filter = ('pays', 'type_systeme')
-    search_fields = ('nom',)
-
-    def get_type_systeme_display(self, obj):
-        return obj.get_type_systeme_display()
-    get_type_systeme_display.short_description = 'Type de système'
-
-@admin.register(Classe)
-class ClasseAdmin(admin.ModelAdmin):
-    list_display = ('sous_systeme', 'nom')
-    list_filter = ('sous_systeme',)
-    search_fields = ('nom',)
-
-@admin.register(TypeExercice)
-class TypeExerciceAdmin(admin.ModelAdmin):
-    list_display = ('matiere', 'nom')
-    list_filter = ('matiere',)
-    search_fields = ('nom', 'description')
-
-class ExerciceAdminForm(forms.ModelForm):
-    class Meta:
-        model = Exercice
-        fields = '__all__'
-        widgets = {
-            'lecons': forms.CheckboxSelectMultiple,
-        }
-
-@admin.register(Exercice)
-class ExerciceAdmin(admin.ModelAdmin):
-    form = ExerciceAdminForm
-    list_display = ('type_exercice', 'get_difficulte_display', 'date_creation')
-    list_filter = ('type_exercice', 'difficulte')
-    search_fields = ('enonce_latex', 'corrige_latex')
-    filter_horizontal = ('lecons',)
-
-    def get_difficulte_display(self, obj):
-        return obj.get_difficulte_display()
-    get_difficulte_display.short_description = 'Difficulté'
-
-@admin.register(Lecon)
-class LeconAdmin(admin.ModelAdmin):
-    list_display = ('matiere', 'classe', 'titre')
-    list_filter = ('matiere', 'classe')
-    search_fields = ('titre', 'contenu_latex')
-
-@admin.register(Pays)
-class PaysAdmin(admin.ModelAdmin):
-    list_display = ('nom', 'code')
-    search_fields = ('nom', 'code')
+# 6. Configuration de l'admin par défaut
+admin.site = admin_site

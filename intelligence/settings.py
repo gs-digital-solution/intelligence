@@ -3,9 +3,7 @@ import os
 from dotenv import load_dotenv
 
 # Chargement des variables d'environnement
-load_dotenv()
-# Charge le .env avec encodage forcé
-load_dotenv(encoding='utf-8')  # Ligne modifiée
+load_dotenv(encoding='utf-8')
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -22,17 +20,22 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'whitenoise.runserver_nostatic',  # Ajout pour Whitenoise
     'core.apps.CoreConfig',
+    'django_extensions',
+    
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # Doit venir juste après SecurityMiddleware
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    
 ]
 
 ROOT_URLCONF = 'intelligence.urls'
@@ -81,20 +84,35 @@ AUTH_PASSWORD_VALIDATORS = [
 
 AUTH_USER_MODEL = 'core.Utilisateur'
 
-# Internationalisation (traductions désactivées)
+# Internationalisation
 LANGUAGE_CODE = 'fr-fr'
 TIME_ZONE = 'Africa/Douala'
-USE_I18N = False  # Désactive le système de traduction
-USE_L10N = False  # Désactive la localisation des formats
+USE_I18N = False
+USE_L10N = False
 USE_TZ = True
 
-# Fichiers statiques
+# Fichiers statiques (Nouvelle configuration)
+STATICFILES_FINDERS = [
+    'django.contrib.staticfiles.finders.FileSystemFinder',
+    'django.contrib.staticfiles.finders.AppDirectoriesFinder',
+]
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_DIRS = [BASE_DIR / 'static']
+#STATICFILES_DIRS = [
+    #BASE_DIR / 'core/static',   #Chemin direct vers vos fichiers CSS
+#]
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, 'core/static'),  # Chemin unique
+]
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
+# Fichiers média
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+# Couleurs CIS
+CIS_PRIMARY_COLOR = "#3498db"
+CIS_SECONDARY_COLOR = "#2c3e50"
 
 # Sécurité supplémentaire
 if not DEBUG:
@@ -107,24 +125,7 @@ if not DEBUG:
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-
-# Paramètres spécifiques au développement
-if DEBUG:
-    # Désactive les protections SSL/HTTPS en dev
-    SESSION_COOKIE_SECURE = False
-    CSRF_COOKIE_SECURE = False
-    SECURE_SSL_REDIRECT = False
-    
-    # Crée le répertoire static s'il n'existe pas
-    STATIC_DIR = BASE_DIR / 'static'
-    if not STATIC_DIR.exists():
-        STATIC_DIR.mkdir()
-else:
-    # Paramètres PRODUCTION (à décommenter plus tard)
-    # SECURE_HSTS_SECONDS = 3600
-    # SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    # SECURE_SSL_REDIRECT = True
-    # SESSION_COOKIE_SECURE = True
-    # CSRF_COOKIE_SECURE = True
-    pass
-
+# Configuration Whitenoise
+WHITENOISE_USE_FINDERS = True
+WHITENOISE_MANIFEST_STRICT = False
+WHITENOISE_ALLOW_ALL_ORIGINS = True
