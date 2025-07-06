@@ -4,6 +4,13 @@ from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import AbstractUser, Group, Permission
 from django.core.validators import FileExtensionValidator
 
+from django.db import models
+from django.core.exceptions import ValidationError
+from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.hashers import make_password
+from django.core.validators import FileExtensionValidator
+
+
 class Utilisateur(AbstractUser):
     # 1. Résolution des conflits de groupes/permissions
     groups = models.ManyToManyField(
@@ -96,24 +103,31 @@ class Matiere(models.Model):
         return f"{self.nom} ({self.code}) - {self.classe}"  # Ajout de la classe dans l'affichage
 
 class TypeExercice(models.Model):
-    classe = models.ForeignKey(Classe, on_delete=models.CASCADE, verbose_name="Classe")
-    matiere = models.ForeignKey(Matiere, on_delete=models.CASCADE, verbose_name="Matière")
+    matiere = models.ForeignKey(
+        'Matiere', 
+        on_delete=models.CASCADE, 
+        verbose_name="Matière"
+    )
     nom = models.CharField(max_length=50, verbose_name="Nom du type")
-    #description = models.TextField(blank=True, verbose_name="Description")
 
     class Meta:
-        unique_together = ('classe', 'matiere', 'nom')
+        unique_together = ('matiere', 'nom')
         verbose_name = "Type d'exercice"
         verbose_name_plural = "Types d'exercices"
 
     def __str__(self):
         return f"{self.matiere} - {self.nom}"
 
-    def save(self, *args, **kwargs):
-        """Validation cohérence classe-matière"""
-        if self.matiere.classe != self.classe:
-            raise ValueError("La matière doit appartenir à la classe sélectionnée")
-        super().save(*args, **kwargs)
+    @property
+    def classe(self):
+        """Accès à la classe via la matière (propriété calculée)"""
+        return self.matiere.classe
+
+    def clean(self):
+        """Validation de la cohérence matière/classe"""
+        if hasattr(self, 'matiere') and hasattr(self.matiere, 'classe'):
+            if not self.matiere.classe:
+                raise ValidationError("La matière doit être associée à une classe")
 
 class Lecon(models.Model):
     matiere = models.ForeignKey(Matiere, on_delete=models.CASCADE)
@@ -144,17 +158,26 @@ class Exercice(models.Model):
         ('MOYEN', 'Moyen'),
         ('DIFFICILE', 'Difficile'),
     )
-    classe = models.ForeignKey(
-        'Classe', 
-        on_delete=models.CASCADE, 
-        verbose_name="Classe",
-        null=True,  # Temporairement nullable pour la migration
-        blank=True  # Permet un champ vide dans l'admin
+    
+    matiere = models.ForeignKey(
+        'Matiere',
+        on_delete=models.CASCADE,
+        verbose_name="Matière"
     )
-    matiere = models.ForeignKey('Matiere', on_delete=models.CASCADE, verbose_name="Matière")
-    lecons = models.ManyToManyField('Lecon', blank=True, verbose_name="Leçons concernées")
-    type_exercice = models.ForeignKey(TypeExercice, on_delete=models.CASCADE)
-    difficulte = models.CharField(max_length=10, choices=DIFFICULTE)
+    type_exercice = models.ForeignKey(
+        TypeExercice,
+        on_delete=models.CASCADE,
+        verbose_name="Type d'exercice"
+    )
+    lecons = models.ManyToManyField(
+        'Lecon',
+        blank=True,
+        verbose_name="Leçons concernées"
+    )
+    difficulte = models.CharField(
+        max_length=10,
+        choices=DIFFICULTE
+    )
     enonce_latex = models.TextField()
     corrige_latex = models.TextField()
     date_creation = models.DateTimeField(auto_now_add=True)
@@ -162,7 +185,24 @@ class Exercice(models.Model):
     class Meta:
         verbose_name = "Exercice"
         verbose_name_plural = "Exercices"
-        ordering = ['-date_creation']  # Tri par défaut
+        ordering = ['-date_creation']
+        indexes = [
+            models.Index(fields=['matiere', 'type_exercice']),
+        ]
 
     def __str__(self):
         return f"{self.matiere} - {self.type_exercice} ({self.get_difficulte_display()})"
+
+    @property
+    def classe(self):
+        """Accès à la classe via la matière (propriété calculée)"""
+        return self.matiere.classe
+
+    def clean(self):
+        """Validation de la cohérence matière/type_exercice"""
+        if (hasattr(self, 'matiere') and 
+            hasattr(self, 'type_exercice') and 
+            self.matiere != self.type_exercice.matiere):
+            raise ValidationError(
+                "Le type d'exercice doit correspondre à la matière sélectionnée"
+            )

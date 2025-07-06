@@ -1,62 +1,72 @@
 document.addEventListener('DOMContentLoaded', function() {
-    const classeSelect = document.getElementById('id_classe');
-    const matiereSelect = document.getElementById('id_matiere');
+    // Sélecteurs communs
+    const classeSelect = document.querySelector('.classe-select, #id_classe');
+    const matiereSelect = document.querySelector('.matiere-select, #id_matiere');
+    const typeExerciceSelect = document.getElementById('id_type_exercice');
 
-    if (classeSelect && matiereSelect) {
-        // 1. Filtrage des matières quand la classe change
-        classeSelect.addEventListener('change', function() {
-            const classeId = this.value;
-            if (classeId) {
-                fetch(`/admin/filter-matieres/?classe_id=${classeId}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        // Réinitialise et remplit le select des matières
-                        matiereSelect.innerHTML = '<option value="">---------</option>';
-                        data.matieres.forEach(matiere => {
-                            const option = document.createElement('option');
-                            option.value = matiere.id;
-                            option.textContent = matiere.nom;
-                            matiereSelect.appendChild(option);
+    // Fonction générique pour charger les matières
+    const loadMatieres = (classeId, targetSelect) => {
+        if (classeId) {
+            fetch(`/api/matieres/?classe_id=${classeId}`)
+                .then(r => r.json())
+                .then(data => {
+                    let options = '<option value="">---------</option>';
+                    if (data.matieres) { // Format de type_exercice_admin.js
+                        data.matieres.forEach(m => {
+                            options += `<option value="${m.id}">${m.nom}</option>`;
                         });
-                        // Vide les leçons quand la classe change
-                        resetLecons();
-                    });
-            } else {
-                matiereSelect.innerHTML = '<option value="">---------</option>';
-                resetLecons();
-            }
-        });
-
-        // 2. Filtrage des leçons quand la matière change
-        matiereSelect.addEventListener('change', function() {
-            const matiereId = this.value;
-            if (matiereId) {
-                fetch(`/admin/filter-lecons/?matiere_id=${matiereId}`)
-                    .then(response => response.json())
-                    .then(populateLecons);
-            } else {
-                resetLecons();
-            }
-        });
-
-        // Fonction pour vider les leçons
-        function resetLecons() {
-            const selectFrom = document.querySelector('select[name="lecons_from"]');
-            if (selectFrom) selectFrom.innerHTML = '';
-        }
-
-        // Fonction pour remplir les leçons
-        function populateLecons(data) {
-            const selectFrom = document.querySelector('select[name="lecons_from"]');
-            if (selectFrom) {
-                selectFrom.innerHTML = '';
-                data.lecons.forEach(lecon => {
-                    const option = document.createElement('option');
-                    option.value = lecon.id;
-                    option.textContent = lecon.titre;
-                    selectFrom.appendChild(option);
+                    } else { // Format de exercice_admin.js original
+                        options = data.options || '';
+                    }
+                    targetSelect.innerHTML = options;
+                    
+                    // Si on change la matière, on met à jour les types d'exercice
+                    if (targetSelect === matiereSelect && typeExerciceSelect) {
+                        updateTypeExercices(targetSelect.value);
+                    }
                 });
-            }
+        } else {
+            targetSelect.innerHTML = '<option value="">---------</option>';
+        }
+    };
+
+    // Fonction pour charger les types d'exercice
+    const updateTypeExercices = (matiereId) => {
+        if (matiereId && typeExerciceSelect) {
+            fetch(`/api/type-exercices/?matiere_id=${matiereId}`)
+                .then(r => r.json())
+                .then(data => {
+                    let options = '<option value="">---------</option>';
+                    data.forEach(item => {
+                        options += `<option value="${item.id}">${item.nom}</option>`;
+                    });
+                    typeExerciceSelect.innerHTML = options;
+                });
+        } else if (typeExerciceSelect) {
+            typeExerciceSelect.innerHTML = '<option value="">---------</option>';
+        }
+    };
+
+    // Écouteurs d'événements
+    if (classeSelect && matiereSelect) {
+        classeSelect.addEventListener('change', function() {
+            loadMatieres(this.value, matiereSelect);
+        });
+        
+        // Initialisation si une classe est déjà sélectionnée
+        if (classeSelect.value) {
+            loadMatieres(classeSelect.value, matiereSelect);
+        }
+    }
+
+    if (matiereSelect && typeExerciceSelect) {
+        matiereSelect.addEventListener('change', function() {
+            updateTypeExercices(this.value);
+        });
+        
+        // Initialisation si une matière est déjà sélectionnée
+        if (matiereSelect.value) {
+            updateTypeExercices(matriceSelect.value);
         }
     }
 });

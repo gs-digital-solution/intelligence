@@ -3,6 +3,8 @@ from django.contrib.auth.admin import UserAdmin
 from django import forms
 from django.contrib.auth.hashers import make_password
 from django.templatetags.static import static
+from django.core.exceptions import ValidationError
+from .forms import ExerciceAdminForm  # L'import doit correspondre exactement au nom de la classe
 from .models import (
     Utilisateur,
     Investisseur,
@@ -39,6 +41,8 @@ class UtilisateurAdmin(UserAdmin):
 class LeconInline(admin.TabularInline):
     model = Lecon
     extra = 1
+    fields = ('titre', 'matiere', 'fichier_pdf')
+    autocomplete_fields = ['matiere']
 
 class MatiereAdmin(admin.ModelAdmin):
     list_display = ('nom', 'code', 'classe')
@@ -61,48 +65,106 @@ class TypeExerciceForm(forms.ModelForm):
         model = TypeExercice
         fields = '__all__'
         widgets = {
-            'classe': forms.Select(attrs={'class': 'classe-select'}),
             'matiere': forms.Select(attrs={'class': 'matiere-select'}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
-        # Filtrage initial si instance existe
-        if self.instance.pk:
-            self.fields['matiere'].queryset = Matiere.objects.filter(classe=self.instance.classe)
-        else:
-            self.fields['matiere'].queryset = Matiere.objects.none()
+        if 'matiere' in self.fields:
+            if self.instance and self.instance.pk:
+                self.fields['matiere'].queryset = Matiere.objects.filter(
+                    classe=self.instance.matiere.classe
+                )
+            else:
+                self.fields['matiere'].queryset = Matiere.objects.none()
+
+    def clean(self):
+        cleaned_data = super().clean()
+        matiere = cleaned_data.get('matiere')
+        
+        if matiere and not matiere.classe:
+            raise ValidationError("La matière doit être associée à une classe valide")
+        
+        return cleaned_data
 
 class TypeExerciceAdmin(admin.ModelAdmin):
     form = TypeExerciceForm
-    list_display = ('classe', 'matiere', 'nom')
-    list_filter = ('classe', 'matiere')
-    #search_fields = ('nom', 'description')
+    list_display = ('nom', 'matiere', 'classe_display')
+    list_filter = ('matiere__classe', 'matiere')
+    search_fields = ('nom', 'matiere__nom')
     autocomplete_fields = ['matiere']
     
+    def classe_display(self, obj):
+        return obj.matiere.classe if obj.matiere else '-'
+    classe_display.short_description = 'Classe'
+    classe_display.admin_order_field = 'matiere__classe'
+    
     class Media:
-        js = ('js/type_exercice_admin.js',)  # JS pour le filtrage dynamique
+        js = ('js/exercice_admin.js',)
+
+class ExerciceAdminForm(forms.ModelForm):
+    class Meta:
+        model = Exercice
+        fields = '__all__'
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        if 'matiere' in self.fields and 'type_exercice' in self.fields:
+            if self.instance and self.instance.pk:
+                self.fields['type_exercice'].queryset = TypeExercice.objects.filter(
+                    matiere=self.instance.matiere
+                )
+            else:
+                self.fields['type_exercice'].queryset = TypeExercice.objects.none()
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        matiere = cleaned_data.get('matiere')
+        type_exercice = cleaned_data.get('type_exercice')
+        
+        if matiere and type_exercice and type_exercice.matiere != matiere:
+            raise ValidationError(
+                "Le type d'exercice doit correspondre à la matière sélectionnée"
+            )
+        
+        return cleaned_data
 
 class ExerciceAdmin(admin.ModelAdmin):
     form = ExerciceAdminForm
-    list_display = ('classe', 'matiere', 'type_exercice', 'difficulte')
-    list_filter = ('classe', 'matiere', 'difficulte')
-    filter_horizontal = ('lecons',)
+    list_display = ('matiere', 'type_exercice', 'difficulte', 'classe_display')
+    list_filter = ('matiere__classe', 'matiere', 'difficulte')
     search_fields = ('enonce_latex', 'corrige_latex')
+    raw_id_fields = ('lecons',)
+    autocomplete_fields = ['matiere', 'type_exercice']
+    
+    def classe_display(self, obj):
+        return obj.matiere.classe if obj.matiere else '-'
+    classe_display.short_description = 'Classe'
+    classe_display.admin_order_field = 'matiere__classe'
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            'matiere', 'type_exercice', 'matiere__classe'
+        )
     
     class Media:
-        js = ('js/exercice_admin.js',)  # Intégration du JS pour le filtrage dynamique
+        css = {
+            'all': ('admin/css/overrides.css',)
+        }
+        js = ('js/exercice_admin.js',)
 
 class LeconAdmin(admin.ModelAdmin):
-    list_display = ('titre', 'matiere', 'classe')
+    list_display = ('titre', 'matiere', 'classe_display')
     list_filter = ('matiere__classe', 'matiere')
     search_fields = ('titre', 'contenu_latex')
     autocomplete_fields = ['matiere']
-
-    def classe(self, obj):
-        return obj.matiere.classe
-    classe.admin_order_field = 'matiere__classe'
+    
+    def classe_display(self, obj):
+        return obj.matiere.classe if obj.matiere else '-'
+    classe_display.short_description = 'Classe'
+    classe_display.admin_order_field = 'matiere__classe'
 
 class PaysAdmin(admin.ModelAdmin):
     list_display = ('nom',)
@@ -130,7 +192,7 @@ class InvestisseurAdmin(admin.ModelAdmin):
             obj.set_password(form.cleaned_data['password'])
         super().save_model(request, obj, form, change)
 
-# 3. Configuration de l'AdminSite personnalisé
+# Configuration de l'AdminSite personnalisé
 class CISAdminSite(admin.AdminSite):
     site_header = "CIS: Correcteur Intelligent de Sujets"
     site_title = "CIS Admin"
@@ -143,13 +205,13 @@ class CISAdminSite(admin.AdminSite):
         media.add_css({
             'all': static('core/css/cis-admin.css'),
         })
-        media.add_js(('js/exercice_admin.js',))  # Chargement global du JS
+        media.add_js(('js/admin-dynamic-filters.js',))
         return media
 
-# 4. Création et configuration de l'instance admin
+# Création et configuration de l'instance admin
 admin_site = CISAdminSite(name='cis_admin')
 
-# 5. Enregistrement des modèles
+# Enregistrement des modèles
 admin_site.register(Utilisateur, UtilisateurAdmin)
 admin_site.register(Investisseur, InvestisseurAdmin)
 admin_site.register(Pays, PaysAdmin)
@@ -160,5 +222,5 @@ admin_site.register(TypeExercice, TypeExerciceAdmin)
 admin_site.register(Lecon, LeconAdmin)
 admin_site.register(Exercice, ExerciceAdmin)
 
-# 6. Configuration de l'admin par défaut
+# Configuration de l'admin par défaut
 admin.site = admin_site
