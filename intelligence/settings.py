@@ -2,17 +2,16 @@ from pathlib import Path
 import os
 from dotenv import load_dotenv
 
-# Chargement des variables d'environnement
-load_dotenv(encoding='utf-8')
-
+# Configuration de base
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(os.path.join(BASE_DIR, '.env'), encoding='utf-8')
 
-# Sécurité
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-fallback-key-for-dev-only')
+# ==================== CORE CONFIGURATION ====================
+SECRET_KEY = os.environ['SECRET_KEY']  # Doit être défini dans les variables d'environnement
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
-ALLOWED_HOSTS = ['*'] if DEBUG else ['votre-domaine.com', 'www.votre-domaine.com']
+ALLOWED_HOSTS = ['*'] if DEBUG else ['.onrender.com', 'localhost']
 
-# Applications
+# ==================== APPLICATIONS ====================
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -20,24 +19,24 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'whitenoise.runserver_nostatic',  # Ajout pour Whitenoise
+    'whitenoise.runserver_nostatic',
     'core.apps.CoreConfig',
     'django_extensions',
-    
 ]
 
+# ==================== MIDDLEWARE ====================
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',  # Doit venir juste après SecurityMiddleware
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    
 ]
 
+# ==================== TEMPLATES & URLS ====================
 ROOT_URLCONF = 'intelligence.urls'
 
 TEMPLATES = [
@@ -47,6 +46,7 @@ TEMPLATES = [
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
+                'django.template.context_processors.debug',
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
@@ -57,24 +57,26 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'intelligence.wsgi.application'
 
-# Base de données
+# ==================== DATABASE (Render Optimized) ====================
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME', 'intelligence_db'),
-        'USER': os.getenv('DB_USER', 'titus'),
-        'PASSWORD': os.getenv('DB_PASSWORD', 'intelligence18'),
-        'HOST': os.getenv('DB_HOST', 'localhost'),
+        'NAME': os.environ['DB_NAME'],
+        'USER': os.environ['DB_USER'],
+        'PASSWORD': os.environ['DB_PASSWORD'],
+        'HOST': os.environ['DB_HOST'],
         'PORT': os.getenv('DB_PORT', '5432'),
         'OPTIONS': {
-            'client_encoding': 'UTF8',
-            'options': '-c idle_in_transaction_session_timeout=30000 -c statement_timeout=5000'
+            'connect_timeout': 5,
+            'keepalives': 1,
+            'keepalives_idle': 30,
+            'keepalives_interval': 10,
         },
-        'CONN_MAX_AGE': 60,
+        'CONN_MAX_AGE': 300,
     }
 }
 
-# Authentification
+# ==================== AUTHENTICATION ====================
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
@@ -84,48 +86,39 @@ AUTH_PASSWORD_VALIDATORS = [
 
 AUTH_USER_MODEL = 'core.Utilisateur'
 
-# Internationalisation
+# ==================== INTERNATIONALIZATION ====================
 LANGUAGE_CODE = 'fr-fr'
 TIME_ZONE = 'Africa/Douala'
-USE_I18N = False
-USE_L10N = False
+USE_I18N = True
+USE_L10N = True
 USE_TZ = True
 
-# Fichiers statiques (Nouvelle configuration)
-STATICFILES_FINDERS = [
-    'django.contrib.staticfiles.finders.FileSystemFinder',
-    'django.contrib.staticfiles.finders.AppDirectoriesFinder',
-]
+# ==================== STATIC & MEDIA FILES ====================
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-#STATICFILES_DIRS = [
-    #BASE_DIR / 'core/static',   #Chemin direct vers vos fichiers CSS
-#]
-STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'core/static'),  # Chemin unique
-]
+STATICFILES_DIRS = [BASE_DIR / 'core/static']
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-# Fichiers média
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-# Couleurs CIS
-CIS_PRIMARY_COLOR = "#3498db"
-CIS_SECONDARY_COLOR = "#2c3e50"
-
-# Sécurité supplémentaire
+# ==================== SECURITY ====================
 if not DEBUG:
-    SECURE_HSTS_SECONDS = 3600
+    SECURE_HSTS_SECONDS = 2_592_000  # 30 days
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_REFERRER_POLICY = 'same-origin'
 
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-# Configuration Whitenoise
+# ==================== WHITENOISE OPTIMIZATION ====================
+WHITENOISE_MAX_AGE = 31536000  # 1 year cache
 WHITENOISE_USE_FINDERS = True
 WHITENOISE_MANIFEST_STRICT = False
-WHITENOISE_ALLOW_ALL_ORIGINS = True
+
+# ==================== RENDER SPECIFIC ====================
+if os.getenv('RENDER', None):
+    ALLOWED_HOSTS.append(os.getenv('RENDER_EXTERNAL_HOSTNAME', ''))
+
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
