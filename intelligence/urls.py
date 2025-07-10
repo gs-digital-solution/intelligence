@@ -7,6 +7,16 @@ from core.views import (  # Import depuis votre app core
     filter_lecons
 )
 
+from django.http import HttpResponse
+
+def home(request):
+    return HttpResponse("Bienvenue sur mon site Django !")
+
+urlpatterns = [
+    path('', home),  # Page d'accueil
+    path('admin/', admin.site.urls),
+]
+
 urlpatterns = [
     # Interface d'administration
     path('admin/', admin.site.urls),
