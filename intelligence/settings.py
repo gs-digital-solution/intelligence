@@ -1,7 +1,6 @@
 import os
 import django
 from django.core.wsgi import get_wsgi_application
-
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -121,13 +120,5 @@ WHITENOISE_USE_FINDERS = True
 WHITENOISE_MANIFEST_STRICT = False
 
 # ==================== RENDER SPECIFIC ====================
-if os.getenv('RENDER', None):
-    ALLOWED_HOSTS.append(os.getenv('RENDER_EXTERNAL_HOSTNAME', ''))
 
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-if os.getenv('RENDER'):
-    from django.contrib.auth import get_user_model
-    User = get_user_model()
-    User.objects.create_superuser('titus', 'titus.asaph18@email.com', 'intelligence18')
     
