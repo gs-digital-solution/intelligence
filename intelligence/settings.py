@@ -122,3 +122,9 @@ if os.getenv('RENDER', None):
     ALLOWED_HOSTS.append(os.getenv('RENDER_EXTERNAL_HOSTNAME', ''))
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+if os.getenv('RENDER'):
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    User.objects.create_superuser('titus', 'titus.asaph18@email.com', 'intelligence18')
+    
